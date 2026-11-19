@@ -184,7 +184,7 @@ main{position:relative;z-index:1;max-width:980px;margin:0 auto}
 .br i{position:absolute;left:44%;top:50%;width:13%;height:520%;transform-origin:50% 0;transform:rotate(14deg);transition:transform 1.1s cubic-bezier(.4,.1,.2,1);
   background:linear-gradient(90deg,#96969c,#e8e8ec,#96969c);border-radius:3px;box-shadow:2px 3px 5px rgba(0,0,0,.6)}
 .br i::after{content:"";position:absolute;left:-90%;bottom:-6%;width:280%;height:13%;border-radius:2px;background:#28282c;box-shadow:0 2px 4px rgba(0,0,0,.7)}
-.mesa.on .br i{transform:rotate(33deg)}
+.mesa.on .br i{transform:rotate(calc(25deg + var(--av,0) * 21deg))}  /* the needle tracks in as it plays */
 .ld{position:absolute;left:2%;bottom:5%;width:10px;height:10px;border-radius:50%;background:#501412;box-shadow:0 0 0 2px rgba(0,0,0,.5)}
 .mesa.on .ld{background:var(--rojo);box-shadow:0 0 10px rgba(255,59,48,.9),0 0 0 2px rgba(0,0,0,.5)}
 @media (prefers-reduced-motion:reduce){.mesa.on .vi{animation:none}}
@@ -354,6 +354,8 @@ function escribe(){
   const lib = document.querySelector('.libreta');
   if (lib && p.tiempos && p.tiempos.length && audio.getAttribute('src') === p.audio){
     const t = audio.currentTime;
+    const mesa = document.querySelector('.mesa');
+    if (mesa && audio.duration) mesa.style.setProperty('--av', (t / audio.duration + (audio.paused ? 0 : .004 * Math.sin(t * 7))).toFixed(4));
     let i = -1;
     for (let k = 0; k < p.tiempos.length; k++) if (t >= p.tiempos[k][0] - 0.1) i = k;
     if (i !== ultimo){
