@@ -184,7 +184,8 @@ main{position:relative;z-index:1;max-width:980px;margin:0 auto}
 .br i{position:absolute;left:44%;top:50%;width:13%;height:520%;transform-origin:50% 0;transform:rotate(14deg);transition:transform 1.1s cubic-bezier(.4,.1,.2,1);
   background:linear-gradient(90deg,#96969c,#e8e8ec,#96969c);border-radius:3px;box-shadow:2px 3px 5px rgba(0,0,0,.6)}
 .br i::after{content:"";position:absolute;left:-90%;bottom:-6%;width:280%;height:13%;border-radius:2px;background:#28282c;box-shadow:0 2px 4px rgba(0,0,0,.7)}
-.mesa.on .br i{transform:rotate(calc(25deg + var(--av,0) * 21deg))}  /* the needle tracks in as it plays */
+.mesa.cargado .br i{transform:rotate(calc(25deg + var(--av,0) * 21deg))}  /* the needle tracks in as it plays */
+.br i{cursor:grab;touch-action:none}.br i:before{content:"";position:absolute;left:-160%;right:-160%;top:8%;bottom:-8%}.mesa.arr .br i{transition:none;cursor:grabbing}  /* and it can be dragged to scrub */
 .ld{position:absolute;left:2%;bottom:5%;width:10px;height:10px;border-radius:50%;background:#501412;box-shadow:0 0 0 2px rgba(0,0,0,.5)}
 .mesa.on .ld{background:var(--rojo);box-shadow:0 0 10px rgba(255,59,48,.9),0 0 0 2px rgba(0,0,0,.5)}
 @media (prefers-reduced-motion:reduce){.mesa.on .vi{animation:none}}
@@ -310,8 +311,9 @@ function pintarDetalle(){
     }).join('');
   }
   const tocando = !audio.paused && audio.getAttribute('src') === p.audio;
+  const cargada = !!p.audio && audio.getAttribute('src') === p.audio && audio.currentTime > 0;
   $('#detalle').innerHTML = `
-    <div class="td"><div class="mesa${tocando ? ' on' : ''}">
+    <div class="td"><div class="mesa${tocando ? ' on' : ''}${cargada ? ' cargado' : ''}" style="--av:${cargada && audio.duration ? (audio.currentTime / audio.duration).toFixed(4) : 0}">
       <div class="funda">${cartel(p, actual)}</div>
       <div class="plato"><div class="vi"><div class="et">${cartel(p, actual)}</div><span class="eje"></span></div></div>
       <div class="br"><i></i></div><span class="ld"></span>
@@ -341,7 +343,7 @@ $('#play').onclick = () => { if (!PISTAS[actual].audio) return siguiente(1); aud
 $('#next').onclick = () => siguiente(1);
 $('#prev').onclick = () => siguiente(-1);
 $('#todo').onclick = () => { elegir(0); tocar(); };
-audio.onplay = () => { $('#play').textContent = '❚❚'; $('#play').setAttribute('aria-label', 'Pause'); const m = $('.mesa'); if (m) m.classList.add('on'); };
+audio.onplay = () => { $('#play').textContent = '❚❚'; $('#play').setAttribute('aria-label', 'Pause'); const m = $('.mesa'); if (m) m.classList.add('on', 'cargado'); };
 audio.onpause = () => { $('#play').textContent = '▶'; $('#play').setAttribute('aria-label', 'Play'); const m = $('.mesa'); if (m) m.classList.remove('on'); };
 audio.ontimeupdate = () => { if (audio.duration){ $('#pos').value = audio.currentTime / audio.duration * 1000; $('#cur').textContent = fmt(audio.currentTime); $('#dur').textContent = fmt(audio.duration); } };
 audio.onended = () => siguiente(1);
@@ -349,13 +351,39 @@ $('#pos').oninput = e => { if (audio.duration) audio.currentTime = e.target.valu
 
 // Sigue el audio y escribe la letra: un verso se enseña cuando empieza a sonar y se rellena de tinta hasta su final.
 let ultimo = -2;
+// the needle is a scrub bar: drag it towards the label to go forward, towards the edge to go back
+let arrastre = null;
+const avDe = (e, br) => {
+  const r = br.getBoundingClientRect();
+  const g = Math.atan2(-(e.clientX - r.left - r.width / 2), e.clientY - r.top - r.height / 2) * 180 / Math.PI;
+  return Math.max(0, Math.min(1, (g - 25) / 21));
+};
+document.addEventListener('pointerdown', e => {
+  const i = e.target.closest && e.target.closest('.mesa.cargado .br i');
+  if (!i) return;
+  e.preventDefault();
+  arrastre = {mesa: i.closest('.mesa'), br: i.parentElement};
+  arrastre.mesa.classList.add('arr');
+  arrastre.mesa.style.setProperty('--av', avDe(e, arrastre.br).toFixed(4));
+});
+document.addEventListener('pointermove', e => { if (arrastre) arrastre.mesa.style.setProperty('--av', avDe(e, arrastre.br).toFixed(4)); });
+document.addEventListener('pointerup', e => {
+  if (!arrastre) return;
+  const v = avDe(e, arrastre.br);
+  arrastre.mesa.classList.remove('arr');
+  arrastre = null;
+  if (audio.duration) audio.currentTime = Math.min(v * audio.duration, audio.duration - 0.5);
+  ultimo = -2;
+});
+document.addEventListener('pointercancel', () => { if (arrastre) { arrastre.mesa.classList.remove('arr'); arrastre = null; } });
+
 function escribe(){
   const p = PISTAS[actual];
   const lib = document.querySelector('.libreta');
   if (lib && p.tiempos && p.tiempos.length && audio.getAttribute('src') === p.audio){
     const t = audio.currentTime;
     const mesa = document.querySelector('.mesa');
-    if (mesa && audio.duration) mesa.style.setProperty('--av', (t / audio.duration + (audio.paused ? 0 : .004 * Math.sin(t * 7))).toFixed(4));
+    if (mesa && audio.duration && !arrastre) mesa.style.setProperty('--av', (t / audio.duration + (audio.paused ? 0 : .004 * Math.sin(t * 7))).toFixed(4));
     let i = -1;
     for (let k = 0; k < p.tiempos.length; k++) if (t >= p.tiempos[k][0] - 0.1) i = k;
     if (i !== ultimo){
